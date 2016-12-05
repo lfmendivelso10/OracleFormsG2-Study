@@ -1,0 +1,277 @@
+pre{
+	"-------------------------".println();
+	"Start Phase 2: Transformation - Ecore Metamodel with Validated Annotations to Visualization's Data".println();
+	"-------------------------".println();
+	var id = 0;
+	var idR = 0;
+	"1. Create configuration for Visualization Specification".println();
+	var system = Data!System.allInstances().first();
+	var package = Input!EClass.allInstances().first();
+	system.name = package.name;
+	system.elements = new List();
+	system.relations = new List();
+	"2. Get all classes from Ecore's input.".println();
+	var allClasses = Input!EClass.allInstances();
+	"3. Find all relationships by Annotation 'Relationship'".println();
+	var allRelations = Input!EClass.allInstances().select(r|r.getEAnnotation("Relationship") <> null);
+	"4. Process All Clusters".println();
+	processAllClusters();
+	"5. Process All Relationships".println();
+	processRelationships();
+}
+post{
+	"-------------------------".println();
+	"End Phase 2".println();
+	"-------------------------".println();	
+}
+
+// ------- For Relationships
+operation processRelationships(){
+	for(relation in allRelations){
+		var sourceClassForQuery = getRefEndpointByRelationClass(relation,"source");
+		var targetClassForQuery = getRefEndpointByRelationClass(relation,"target");
+		var containerClassForQuery = getContainerFromRelationClass(relation);
+
+		
+		if(sourceClassForQuery <> null and targetClassForQuery<>null and containerClassForQuery<>null){
+			for(cluster in system.elements){
+				
+				var allClusteredElements = getAllElementsFromCluster(cluster);
+				
+				var sourceElement = allClusteredElements.select(e|e.metaClass = sourceClassForQuery.eReferenceType.name).first();
+				var targetElement = allClusteredElements.select(e|e.metaClass = targetClassForQuery.eReferenceType.name).first();
+				var containerElement = allClusteredElements.select(e|e.metaClass = containerClassForQuery.name).first();
+				
+				var clusterClass = allClasses.select(c|c.name = cluster.metaClass).first();
+				
+				if(sourceElement==null){
+					if(sourceClassForQuery.eReferenceType.name == cluster.metaClass or sourceClassForQuery.eReferenceType.isSuperTypeOf(clusterClass)){
+						sourceElement = cluster;
+					}
+				}
+				if(targetElement==null){
+					if(targetClassForQuery.eReferenceType.name == cluster.metaClass  or targetClassForQuery.eReferenceType.isSuperTypeOf(clusterClass)){
+						targetElement = cluster;
+					}
+				}
+				if(containerElement==null){
+					if(containerClassForQuery.name == cluster.metaClass){
+						containerElement = cluster;
+					}
+					else{
+						if(containerClassForQuery.name = cluster.domainClass){
+							containerElement = allClasses.select(c|c.name = cluster.domainClass).first();
+						}
+					}
+				}
+				
+				if(sourceClassForQuery <> null and targetClassForQuery <> null and containerClassForQuery <> null and sourceElement <> null and targetElement<>null and containerElement<>null){
+					
+					var relationship = new Data!Relationship();
+					idR=idR+1;
+					relationship.name = "R"+idR+"_"+relation.name;
+					relationship.metaClass = relation.name;
+					
+					relationship.sourceEndQuery=sourceClassForQuery.name;
+					relationship.targetEndQuery=targetClassForQuery.name;
+					
+					relationship.sourceEnd = sourceElement;
+					relationship.targetEnd = targetElement; 
+					
+					var rquery = "";
+					if(containerElement.eClass.name = "EClass"){
+						var ref = containerElement.eAllReferences.select(r|r.eReferenceType = relation or r.eReferenceType.isSuperTypeOf(relation)).first();
+						rquery = ref.name;
+					}
+					else{
+						rquery = containerElement.elementsQuery;
+						var ref = containerClassForQuery.eAllReferences.select(r|r.eReferenceType = relation or r.eReferenceType.isSuperTypeOf(relation)).first();
+						rquery = rquery+"."+ref.name;					
+					}
+					relationship.relationsQuery =rquery;
+					
+					system.relations.add(relationship);
+					cluster.innerRelationships.add(relationship);
+				}
+				else{
+					if(sourceClassForQuery.eReferenceType.abstract or targetClassForQuery.eReferenceType.abstract){
+						var sourceClasses = new List();
+						var targetClasses = new List();
+						
+						if(sourceClassForQuery.eReferenceType.abstract){
+							sourceClasses = allClasses.select(c|sourceClassForQuery.eReferenceType.isSuperTypeOf(c));
+						}
+						sourceClasses.add(sourceClassForQuery.eReferenceType);
+						
+						if(targetClassForQuery.eReferenceType.abstract){
+							targetClasses = allClasses.select(c|sourceClassForQuery.eReferenceType.isSuperTypeOf(c));
+						}
+						targetClasses.add(sourceClassForQuery.eReferenceType);
+						
+						for(sourceClass in sourceClasses){
+							for(targetClass in targetClasses){
+								var sourceElement = allClusteredElements.select(e|e.metaClass = sourceClass.name).first();
+								var targetElement = allClusteredElements.select(e|e.metaClass = targetClass.name).first();
+								if(sourceElement <> null and targetElement <> null and containerElement <> null){
+									var relationship = new Data!Relationship();
+									idR=idR+1;
+									relationship.name = "R"+idR+"_"+relation.name;
+									relationship.metaClass = relation.name;
+									
+									relationship.sourceEndQuery=sourceClassForQuery.name;
+									relationship.targetEndQuery=targetClassForQuery.name;
+									
+									relationship.sourceEnd = sourceElement;
+									relationship.targetEnd = targetElement; 
+									
+									var rquery = "";
+									if(containerElement.eClass.name = "EClass"){
+										var ref = containerElement.eAllReferences.select(r|r.eReferenceType = relation or r.eReferenceType.isSuperTypeOf(relation)).first();
+										rquery = ref.name;
+									}
+									else{
+										rquery = containerElement.elementsQuery;
+										var ref = containerClassForQuery.eAllReferences.select(r|r.eReferenceType = relation or r.eReferenceType.isSuperTypeOf(relation)).first();
+										rquery = rquery+ref.name;					
+									}
+									relationship.relationsQuery =rquery;
+									
+									system.relations.add(relationship);
+									cluster.innerRelationships.add(relationship);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		
+	}
+}
+
+// Get Reference with specific annotation
+operation getRefEndpointByRelationClass(relationClass : Input!EClass, annotation : String) : Input!EReference{
+	var reference = relationClass.eAllReferences.select(r|r.getEAnnotation(annotation) <>null).first();
+	return reference;
+}
+
+// Get Container Class from Relationship Class.
+operation getContainerFromRelationClass(relation : Input!EClass) : Input!EClass{
+	var container = allClasses.select(c|c.eAllReferences.select(r|r.containment = true and (r.eReferenceType = relation or r.eReferenceType.isSuperTypeOf(relation)=true)).size() > 0).first();
+	return container;
+}
+
+// Create a List with all elements contained in a Clusterd with it's subclusters.
+operation getAllElementsFromCluster(cluster : Data!Cluster){
+	var elements = new List();
+	for(el in cluster.clusteredElements){
+		elements.add(el);
+		if(el.eClass.name == "Cluster"){
+			var temps = getAllElementsFromCluster(el);
+			for(t in temps){
+				elements.add(t);
+			}
+		}
+	}
+	return elements;
+}
+
+//---------------------------------- For Clusters --------------
+// Process all Cluster in the ECore Input.
+operation processAllClusters(){
+	var eClassesWithCluster = allClasses.select(c|c.getEAnnotation("Cluster") <>null);
+	for(class in eClassesWithCluster){
+		var domainClass= allClasses.select(c|c.eAllReferences.select(r|r.eReferenceType = class and r.containment = true).size()>0).first();
+		var typeRef;
+		if(domainClass==null){
+			for(superClass in class.eAllSuperTypes){
+				domainClass = allClasses.select(c|c.eAllReferences.select(r|r.eReferenceType = superClass and r.containment = true).size()>0).first();
+				if(domainClass<>null){
+					typeRef = domainClass.eAllReferences.select(r|r.eReferenceType = superClass and r.containment = true).first();
+					break;
+				}
+			}
+		}
+		else{
+			typeRef = domainClass.eAllReferences.select(r|r.eReferenceType = class and r.containment = true).first();
+		}
+		
+		if(domainClass <> null and typeRef<>null){
+			var cluster = generateCluster(class,typeRef.name);
+			cluster.domainClass = domainClass.name;
+			system.elements.add(cluster);
+		}
+		
+	}
+}
+
+// Generate a Cluster from EClass and add a reference string for querying.
+operation generateCluster(class : Input!EClass, reference : String) : Data!Cluster{
+	id=id+1;
+	var cluster = new Data!Cluster();
+	cluster.id="cls_"+id;
+	cluster.metaClass=class.name;
+	cluster.label="Cluster - "+class.name;
+	cluster.clusteredElements = new List();
+	cluster.innerRelationships = new List();
+	cluster.elementsQuery = reference;
+	getClusteredElements(class,cluster);
+	return cluster;
+}
+
+// Fill a Cluster with Elementos from properties annotated with "ClustreredElements"
+operation getClusteredElements(class : Input!EClass, cluster : Data!Cluster){
+	var references = class.eAllReferences.select(r|r.getEAnnotation("ClusteredElements") <>null);
+	for(ref in references){
+		var refClass = ref.eReferenceType;
+		if(refClass.abstract){
+			var eclasses = allClasses.select(c|ref.eReferenceType.isSuperTypeOf(c) = true and c.abstract = false and (c.getEAnnotation("ClusteredElement")<>null or c.getEAnnotation("Cluster")<>null));
+			for(eclass in eclasses){
+				var element = createRepresentation(eclass,cluster,ref);
+				cluster.clusteredElements.add(element);
+			}
+		}
+		else{
+			var element = createRepresentation(refClass,cluster,ref);
+			cluster.clusteredElements.add(element);
+		}
+	}
+	return cluster;
+}
+
+// Generate a representation data from a reference, a cluster and class refered.
+operation createRepresentation(class : Input!EClass, cluster : Data!Cluster, ref : Input!EReference ) : Data!Element{
+	var element;
+	var rquery="";
+	if(cluster.elementsQuery <> ""){
+		rquery = cluster.elementsQuery+"."+ ref.name;
+	}
+	else{
+		rquery = ref.name;
+	}
+	if(class.eAnnotations.select(c|c.source = "Cluster").size() > 0){		
+			element = generateCluster(class,rquery);
+			return element;
+	}
+	else{
+		element = new Data!ClusteredElement();
+		element.id="cle+"+id+"_"+class.name;
+		element.metaClass=class.name;
+		element.label="as Node - "+class.name;
+		element.elementsQuery = rquery;	
+		return element;	
+	}
+}
+
+// This method filter all EClass from an Abstract EClass for Endpoint.
+operation getEClassFromAbstractClass(abstractClass : Input!EClass) : List{
+	var list = new List();
+	for(class in allClasses){
+		if(abstractClass.isSuperTypeOf(class)){
+			if(class.eAnnotations.select(c|c.source = "Cluster" or c.source = "ClusteredElement").size() > 0){
+				list.add(class);
+			}			
+		}
+	}
+	return list;
+}

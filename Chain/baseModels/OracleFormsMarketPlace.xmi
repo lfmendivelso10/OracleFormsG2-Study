@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<techOra:Application xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:techOra="http://uniandes.edu.co/metamodels/OracleForms" xsi:schemaLocation="http://uniandes.edu.co/metamodels/OracleForms ../data/OracleForms.ecore" name="MarketPlace">
+  <modules name="UserModule">
+    <elements xsi:type="techOra:Form" name="UserInformationForm"/>
+    <elements xsi:type="techOra:Table" name="UserTable"/>
+    <elements xsi:type="techOra:Table" name="AddressTable"/>
+    <elementrelations xsi:type="techOra:MasterDetailRelationship" name="UserAddressesRelationship" source="//@modules.0/@elements.0" masterTarget="//@modules.0/@elements.1" detailTarget="//@modules.0/@elements.2"/>
+  </modules>
+  <modules name="ProductModule">
+    <elements xsi:type="techOra:Form" name="ProductInformationForm"/>
+    <elements xsi:type="techOra:Table" name="ProductTable"/>
+    <elementrelations xsi:type="techOra:SingleTableRelationship" name="ProductRelationship" source="//@modules.1/@elements.0" singleTarget="//@modules.1/@elements.1"/>
+  </modules>
+  <modules name="CartModule">
+    <elements xsi:type="techOra:Form" name="CartInformationForm"/>
+    <elements xsi:type="techOra:Table" name="CartTable"/>
+    <elements xsi:type="techOra:Table" name="ItemTable"/>
+    <elements xsi:type="techOra:Form" name="AddItemToCartForm"/>
+    <elementrelations xsi:type="techOra:MasterDetailRelationship" name="CartItemRelationship" source="//@modules.2/@elements.0" masterTarget="//@modules.2/@elements.1" detailTarget="//@modules.2/@elements.2"/>
+    <elementrelations xsi:type="techOra:MasterDetailRelationship" name="CartProductRelationship" source="//@modules.2/@elements.3" masterTarget="//@modules.2/@elements.1" detailTarget="//@modules.1/@elements.1"/>
+    <elementrelations xsi:type="techOra:PLSQLRelationship" name="DiscountProductoFromCartRelationship" source="//@modules.2/@elements.3" plsqlTarget="//@modules.1/@elements.1"/>
+  </modules>
+  <modules name="BonusModule">
+    <elements xsi:type="techOra:Form" name="BonusInformation"/>
+    <elements xsi:type="techOra:Table" name="BonusTable"/>
+    <elements xsi:type="techOra:Table" name="BonusDetailTable"/>
+    <elements xsi:type="techOra:Form" name="BonusDetailForm"/>
+    <elementrelations xsi:type="techOra:SingleTableRelationship" name="BonusRelationship" source="//@modules.3/@elements.0" singleTarget="//@modules.3/@elements.1"/>
+    <elementrelations xsi:type="techOra:MasterDetailRelationship" name="BonusForProductoRelationship" source="//@modules.3/@elements.3" masterTarget="//@modules.3/@elements.1" detailTarget="//@modules.3/@elements.2"/>
+  </modules>
+  <modules name="PaymentModule">
+    <elements xsi:type="techOra:Form" name="PaymentForm"/>
+    <elements xsi:type="techOra:Table" name="PaymentTable"/>
+    <elementrelations xsi:type="techOra:MasterDetailRelationship" name="UserPaymentRelationship" source="//@modules.4/@elements.0" masterTarget="//@modules.0/@elements.1" detailTarget="//@modules.4/@elements.1"/>
+  </modules>
+</techOra:Application>

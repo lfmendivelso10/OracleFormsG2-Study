@@ -1,0 +1,90 @@
+// Verificación sobre references y attributes
+context Input!EStructuralFeature {
+	
+	constraint ClusteredElementsDentroDeCluster {
+	
+    	guard: self.hasAnnotation("ClusteredElements")
+    	
+    	check: self.eContainingClass.hasAnnotation("Cluster")
+
+    	message : self.name + " tiene la anotacion @ClusteredElements pero su padre " + self.eContainingClass.name + " no tiene la anotacion @Cluster"
+	}
+	
+
+}
+
+// Verificación sobre clases
+context Input!EClass {
+	
+	constraint CheckIfClusterIsContainedByOtherClass {
+	
+    	guard: self.hasAnnotation("Cluster")
+    	
+    	check {
+    		var annotation = "@Cluster";
+    		var allClasses = Input!EClass.allInstances();
+    		
+    		var domainClass= allClasses.select(c|c.eAllReferences.select(r|r.eReferenceType = self and r.containment = true).size()>0).first();
+			if(domainClass==null){
+				for(superClass in self.eAllSuperTypes){
+					domainClass = allClasses.select(c|c.eAllReferences.select(r|r.eReferenceType = superClass and r.containment = true).size()>0).first();
+					if(domainClass<>null){
+						break;
+					}
+				}
+			}
+			
+			if(domainClass == null){
+				return false;
+			}
+			else{
+				return true;
+			}
+    	}
+
+    	message : "La clase " + self.name + " tiene la anotacion " + annotation + " pero no es contenido por otra clase."
+	}
+	
+	constraint RelationshipHasSourceAndTarget {
+	
+    	guard: self.hasAnnotation("Relationship")
+    	
+    	check {
+    		// Aquí sacamos la anotación para el mensaje
+    		var falta = "";
+    		var annotation = "@Relationship";
+    			
+    		// Tiene un source?
+    		var hasSource = self.hasChildWithAnnotation("source") or self.hasSuperWithAnnotation("source");
+    		var hasTarget = self.hasChildWithAnnotation("target") or self.hasSuperWithAnnotation("target");
+    		
+    		// No hay source?
+    		if (hasSource = false and hasTarget = false)
+    			falta = "@source ni @target";
+    		else if (hasSource = false)
+    			falta = "@source";
+    		else if (hasTarget = false)
+    			falta = "@target";
+    		
+    		// Esta es la validación como tal
+    		return hasSource and hasTarget;
+    	}
+
+    	message : "La clase " + self.name + " tiene la anotacion " + annotation + " pero no tiene un atributo o referencia con " + falta
+	}
+}
+
+// Operación que permite buscar una anotación determinada (dada como parametro) sobre cualquier elemento
+operation Any hasAnnotation(annotation) : Boolean {
+	return self.eAnnotations.select(a | a.source = annotation).notEmpty();
+}
+
+// Operación que devuelve si una anotación determinada (dada como parametro) existe en cualquier hijo del elemento 
+operation Input!EClass hasChildWithAnnotation(annotation) : Boolean {
+	return self.eReferences.select(a | a.hasAnnotation(annotation)).notEmpty() or self.eAttributes.select(a | a.hasAnnotation(annotation)).notEmpty();
+}
+
+// Operacion que busca recursivamente un hijo con determinada anotación (dada como parametro) entre los atributos de los super tipos del elemento
+operation Any hasSuperWithAnnotation(annotation) : Boolean {
+	return self.eSuperTypes.select(a | a.hasChildWithAnnotation(annotation) or a.hasSuperWithAnnotation(annotation)).notEmpty();
+}

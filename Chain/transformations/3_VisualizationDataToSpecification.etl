@@ -1,0 +1,343 @@
+pre{
+	"-------------------------".println();
+	"Start Phase 3: Transformation - Visualization's Data to Visualization's Specification".println();
+	"-------------------------".println();
+	"1.) Get System Configuration".println();
+	var system = Data!System.allInstances().first();
+	var mainGroup = Sirius!Group.allInstances().first();
+	mainGroup.name = system.name;
+	mainGroup.ownedViewpoints = new List();
+	
+	processMainClusters();
+	addNavegationsMenus();
+}
+post{
+	"-------------------------".println();
+	"End Phase 3".println();
+	"-------------------------".println();	
+}
+
+// /------ Logic For Navegations ------------/
+
+operation addNavegationsMenus(){
+	"3.) Add nagivations menus between diagramas in viewpoints".println();
+	//Get All Diagrams
+	var diagrams = new List();
+	for(viewpoint in mainGroup.ownedViewpoints){
+		for(diagram in viewpoint.ownedRepresentations){
+			diagrams.add(diagram);
+		}
+	}
+	for(mainDiagram in diagrams){
+		for(subdiagram in diagrams){
+			if(mainDiagram.name <> subdiagram.name){
+				var candidates = getDiagramsWithDomainClass(mainDiagram,subdiagram);
+				if(candidates.size()>0){
+					var section = null;
+					if(mainDiagram.defaultLayer.toolSections.size()>0){
+						section = mainDiagram.defaultLayer.toolSections.first();
+					}
+					else{
+						section = new Sirius!ToolSection();					
+						mainDiagram.defaultLayer.toolSections = new List();
+						mainDiagram.defaultLayer.toolSections.add(section);
+						
+						section.name = mainDiagram.name+"_menu";
+						section.label = mainDiagram.label+" (Navegation Menu)";
+						section.ownedTools = new List();
+						
+						var menu = new Sirius!PopupMenu();
+						menu.name = mainDiagram.name+"_menu_popup";
+						menu.label = "For Navegation between Diagrams";
+						menu.menuItemDescription = new List();
+						section.ownedTools.add(menu);
+					}
+					
+					var menu = section.ownedTools.first();
+					
+					var operationAction = new Sirius!OperationAction();	
+					menu.menuItemDescription.add(operationAction);
+					
+					operationAction.name = mainDiagram.name+"_menuItem";
+					operationAction.label = "Go to "+subdiagram.label+" from this element";
+					
+					var navi = new Sirius!Navigation();
+					navi.createIfNotExistent=true;
+					navi.diagramDescription = subdiagram;
+					
+					var initialOperation = new Sirius!InitialOperation();
+					initialOperation.FirstModelOperations = navi;
+					initialOperation.println();
+					
+					operationAction.InitialOperation = initialOperation;
+					
+				}
+			}	
+		}
+	}
+}
+
+operation getDiagramsWithDomainClass(mainDiagram : Sirius!DiagramDescription, subdiagram : Sirius!DiagramDescription) : List{
+	var list = new List();
+	for(node in mainDiagram.allNodeMappings){
+		if(node.domainClass == subdiagram.domainClass){
+			list.add(node);
+		}
+	}
+	for(container in mainDiagram.allContainerMappings){
+		if(container.domainClass == subdiagram.domainClass){
+			list.add(container);
+		}
+		for(node in container.subNodeMappings){
+			if(node.domainClass == subdiagram.domainClass){
+				list.add(node);
+			}
+		}
+	}
+	return list;
+}
+
+// /------ Logic For Diagrams ------------/
+operation processMainClusters(){
+	"2.) Generate 'Viewpoint' per cluster".println();
+	for(cluster in system.elements){
+		
+		// --> Step 1: Creating 'Viewpoint'
+		var viewpoint = new Sirius!Viewpoint();
+		viewpoint.name="VP_"+cluster.id;
+		viewpoint.label="Viewpoints for Cluster "+cluster.metaClass;
+		viewpoint.modelFileExtension = "*";
+		viewpoint.ownedRepresentations = new List();
+		
+		//--> Step 2: Creating 'Global Clusters Diagram' (Type 1)"
+		generateDiagramType1(cluster,viewpoint);
+		
+		//--> Step 3: Creating 'Global Clustered Elements Diagram' (Type 2)"
+		generateDiagramType2(cluster,viewpoint);
+		
+		//--> Step 4: Creating 'Global Clusters and Clustered Elements Diagram(Mixed)' (Type 3)"
+		generateDiagramType3(cluster,viewpoint);
+		mainGroup.ownedViewpoints.add(viewpoint);
+	}
+}
+
+// This operation create a view
+operation generateDiagramType1(cluster : Data!Cluster, viewpoint : Sirius!Viewpoint){
+
+	// Create Diagram
+	var diagram = new Sirius!DiagramDescription();
+	diagram.name = "DT1_For"+cluster.metaClass;
+	diagram.label = "Clusters for "+cluster.metaClass;
+	diagram.domainClass=cluster.domainClass;
+	// create a layer for the diagram
+	var defaultLayer = new Sirius!Layer();
+	defaultLayer.name="Default";
+	defaultLayer.label="Default";
+	defaultLayer.nodeMappings = new List();
+	defaultLayer.edgeMappings = new List();
+	defaultLayer.containerMappings = new List();
+	diagram.defaultLayer = defaultLayer;
+	
+	// Create a representation for the cluster
+	var eNode = new Sirius!NodeMapping();
+	eNode.name = "DT1_Cluster"+cluster.id;
+	eNode.label = cluster.label;
+	eNode.domainClass = cluster.metaClass;
+	eNode.semanticCandidatesExpression = "[ self."+cluster.elementsQuery+" /]";
+	
+	//Add Style to the Cluster Representation
+	var eNodeStyle = new Sirius!EllipseNodeDescription();
+	eNodeStyle.horizontalDiameterComputationExpression = "12";
+	eNodeStyle.verticalDiameterComputationExpression = "12";
+	
+	// Set Color and default parametres to the Cluster Representation
+	var color = Sirius!SystemColor.allInstances().select(c|c.name='orange').first();
+	eNodeStyle.color = color;
+	eNodeStyle.labelAlignment = Sirius!LabelAlignment#CENTER;
+	eNodeStyle.labelPosition = Sirius!LabelPosition#node;
+	eNodeStyle.resizeKind = Sirius!ResizeKind#NSEW;
+	eNode.style = eNodeStyle;
+	diagram.defaultLayer.nodeMappings.add(eNode);
+	
+	var relationsFilter = cluster.innerRelationships.select(r|r.sourceEnd = cluster and r.targetEnd = cluster);
+	
+	for(cls in system.elements){
+		if(cls.domainClass == cluster.domainClass  and cls.metaClass <> cluster.metaClass and cls.id <> cluster.id){
+			var clsRelations = cls.innerRelationships.select(r|r.sourceEnd.metaClass = cluster.metaClass and r.targetEnd.metaClass = cluster.metaClass);
+			for(clsR in clsRelations){
+				relationsFilter.add(clsR);
+			}
+		}	
+	}
+
+	for(relation in relationsFilter){
+		var edge = new Sirius!EdgeMapping();
+		edge.sourceMapping = new List();
+		edge.targetMapping = new List();
+		edge.name = "DT1_Relation_"+relation.name;
+		edge.label = relation.name;
+		edge.semanticCandidatesExpression = "[ self."+relation.relationsQuery+" /]";
+		edge.useDomainElement=true;
+		edge.domainClass=relation.metaClass;
+		edge.sourceFinderExpression = "feature:"+relation.sourceEndQuery;
+		edge.targetFinderExpression = "feature:"+relation.targetEndQuery;	
+		edge.style = new Sirius!EdgeStyleDescription();
+		edge.sourceMapping.add(eNode);
+		edge.targetMapping.add(eNode);
+		diagram.defaultLayer.edgeMappings.add(edge);	
+	}
+	viewpoint.ownedRepresentations.add(diagram);
+}
+
+operation generateDiagramType2(cluster : Data!Cluster, viewpoint : Sirius!Viewpoint){
+	// Create Diagram
+	var diagram = new Sirius!DiagramDescription();
+	diagram.name = "DT2_For"+cluster.metaClass;
+	diagram.label = "Clustered Elements for "+cluster.metaClass;
+	diagram.domainClass=cluster.domainClass;
+	// create a layer for the diagram
+	var defaultLayer = new Sirius!Layer();
+	defaultLayer.name="Default";
+	defaultLayer.label="Default";
+	defaultLayer.nodeMappings = new List();
+	defaultLayer.edgeMappings = new List();
+	defaultLayer.containerMappings = new List();
+	diagram.defaultLayer = defaultLayer;
+	
+	for(element in cluster.clusteredElements){
+		// Create a representation for the cluster
+		var eNode = new Sirius!NodeMapping();
+		eNode.name = "DT2_Element"+element.id;
+		eNode.label = element.label;
+		eNode.domainClass = element.metaClass;
+		eNode.semanticCandidatesExpression = "[ self."+element.elementsQuery+" /]";
+		
+		//Add Style to the Cluster Representation
+		var eNodeStyle = new Sirius!SquareDescription();
+		eNodeStyle.height = 7;
+		eNodeStyle.width = 14;
+
+		var color = Sirius!SystemColor.allInstances().select(c|c.name='light_blue').first();
+		eNodeStyle.color = color;
+		eNodeStyle.labelAlignment = Sirius!LabelAlignment#CENTER;
+		eNodeStyle.labelPosition = Sirius!LabelPosition#node;
+		eNodeStyle.resizeKind = Sirius!ResizeKind#NSEW;
+		eNode.style = eNodeStyle;
+		diagram.defaultLayer.nodeMappings.add(eNode);
+	}
+	
+	for(relation in cluster.innerRelationships){
+		var sNode = diagram.defaultLayer.nodeMappings.select(n|n.domainClass = relation.sourceEnd.metaClass).first();
+		var sTarget = diagram.defaultLayer.nodeMappings.select(n|n.domainClass = relation.targetEnd.metaClass).first();
+		if(sNode <> null and sTarget<>null){
+			var edge = new Sirius!EdgeMapping();
+			edge.sourceMapping = new List();
+			edge.targetMapping = new List();
+			edge.name = "DT2_Relation_"+relation.name;
+			edge.label = relation.name;
+			edge.semanticCandidatesExpression = "[ self."+relation.relationsQuery+" /]";
+			edge.useDomainElement=true;
+			edge.domainClass=relation.metaClass;
+			edge.sourceFinderExpression = "feature:"+relation.sourceEndQuery;
+			edge.targetFinderExpression = "feature:"+relation.targetEndQuery;	
+			edge.style = new Sirius!EdgeStyleDescription();
+			edge.sourceMapping.add(sNode);
+			edge.targetMapping.add(sTarget);
+			diagram.defaultLayer.edgeMappings.add(edge);	
+		}
+	}
+	
+	viewpoint.ownedRepresentations.add(diagram);
+}
+
+operation generateDiagramType3(cluster : Data!Cluster, viewpoint : Sirius!Viewpoint){
+	
+	// Create Diagram
+	var diagram = new Sirius!DiagramDescription();
+	diagram.name = "DT3_For"+cluster.metaClass;
+	diagram.label = "Clusters and Clustered Elements for "+cluster.metaClass;
+	diagram.domainClass=cluster.domainClass;
+	// create a layer for the diagram
+	var defaultLayer = new Sirius!Layer();
+	defaultLayer.name="Default";
+	defaultLayer.label="Default";
+	defaultLayer.nodeMappings = new List();
+	defaultLayer.edgeMappings = new List();
+	defaultLayer.containerMappings = new List();
+	diagram.defaultLayer = defaultLayer;
+	// Generate a TreeLayout 
+	var treeLayout = new Sirius!OrderedTreeLayout();
+	treeLayout.nodeMapping = new List();
+	diagram.Layout = treeLayout;
+	
+	// Create a Container for the cluster 
+	var container = new Sirius!ContainerMapping();
+	container.name = "DT3_Container_"+cluster.metaClass;
+	container.label = cluster.label;
+	container.domainClass = cluster.metaClass;
+	container.semanticCandidatesExpression = "[ self."+cluster.elementsQuery+" /]";
+	container.subNodeMappings = new List();
+	
+	// Set a WorkspaceImageDescription as container's style
+	var nodeStyle = new Sirius!WorkspaceImageDescription();
+	nodeStyle.labelAlignment = Sirius!LabelAlignment#CENTER;
+	nodeStyle.labelPosition = Sirius!LabelPosition#border;
+	nodeStyle.resizeKind = Sirius!ResizeKind#NONE;
+	var dgreen = Sirius!SystemColor.allInstances().select(c|c.name='dark_green').first();
+	var black = Sirius!SystemColor.allInstances().select(c|c.name='black').first();
+	nodeStyle.borderColor = dgreen;
+	nodeStyle.borderSizeComputationExpression = "2";
+	nodeStyle.labelColor = black;
+	nodeStyle.borderLineStyle = Sirius!LineStyle#solid;
+	container.style = nodeStyle;
+	
+	// Add container to the diagram
+	diagram.defaultLayer.containerMappings.add(container);
+	
+	// Add Container to the TreeLayout
+	treeLayout.nodeMapping.add(container);
+	
+	for(element in cluster.clusteredElements){
+		var eNode = new Sirius!NodeMapping();
+		eNode.name = "DT3_Node_"+element.metaClass;
+		eNode.label = element.label;
+		eNode.domainClass = element.metaClass;
+		eNode.semanticCandidatesExpression = "[self."+element.elementsQuery.replace(cluster.elementsQuery+".","")+" /]";
+
+		var eNodeStyle = new Sirius!SquareDescription();
+		eNodeStyle.height = 7;
+		eNodeStyle.width = 14;
+
+		var color = Sirius!SystemColor.allInstances().select(c|c.name='light_blue').first();
+		eNodeStyle.color = color;
+		eNodeStyle.labelAlignment = Sirius!LabelAlignment#CENTER;
+		eNodeStyle.labelPosition = Sirius!LabelPosition#node;
+		eNodeStyle.resizeKind = Sirius!ResizeKind#NSEW;
+		eNode.style = eNodeStyle;
+		container.subNodeMappings.add(eNode);
+		treeLayout.nodeMapping.add(eNode);
+	}
+	
+	for(relation in cluster.innerRelationships){
+		var sNode = treeLayout.nodeMapping.select(n|n.domainClass = relation.sourceEnd.metaClass).first();
+		var sTarget = treeLayout.nodeMapping.select(n|n.domainClass = relation.targetEnd.metaClass).first();
+		if(sNode <> null and sTarget<>null){
+			var edge = new Sirius!EdgeMapping();
+			edge.sourceMapping = new List();
+			edge.targetMapping = new List();
+			edge.name = "DT2_Relation_"+relation.name;
+			edge.label = relation.name;
+			edge.semanticCandidatesExpression = "[ self."+relation.relationsQuery+" /]";
+			edge.useDomainElement=true;
+			edge.domainClass=relation.metaClass;
+			edge.sourceFinderExpression = "feature:"+relation.sourceEndQuery;
+			edge.targetFinderExpression = "feature:"+relation.targetEndQuery;	
+			edge.style = new Sirius!EdgeStyleDescription();
+			edge.sourceMapping.add(sNode);
+			edge.targetMapping.add(sTarget);
+			diagram.defaultLayer.edgeMappings.add(edge);
+		}
+	}
+	
+	viewpoint.ownedRepresentations.add(diagram);
+}

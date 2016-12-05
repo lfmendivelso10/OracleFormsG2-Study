@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="project" default="main" xmlns:qvto="http://www.eclipse.org/qvt/1.0.0/Operational">
+	
+	<property name="transformacion.Validation" location="./Chain/validations/1_Validations.evl"/>
+	<property name="transformation.InputToData" location="./Chain/transformations/2_InputToVisualizationData.etl"/>
+	<property name="transformation.DataToVisualization" location="./Chain/transformations/3_VisualizationDataToSpecification.etl"/>
+
+	<property file="./configuration.properties" />
+	<property name="DataModel" location="./Chain/data/2_visualizationData.xmi"/>
+	<property name="OutputModel" location="./Chain/data/3_visualizationSpecification.xmi"/>
+	<property name="Result" location="./Chain/data/VisualizationSpecification.odesign"/>
+
+	<property name="metamodel.visualization.uri" value="./model/VisualizationCore.ecore"/>
+	<property name="metamodel.visualization.metamodeluri" value="http://www.uniandes.edu.co/sistemas/metamodels/visualizationcore"/>
+	<property name="metamodel.ecore" value="http://www.eclipse.org/emf/2002/Ecore"/>
+
+	<property name="metamodel.sirius.parte1" value="http://www.eclipse.org/sirius/description/1.1.0,"/>
+	<property name="metamodel.sirius.parte2" value="${metamodel.sirius.parte1}http://www.eclipse.org/sirius/description/audit/1.1.0,"/>
+	<property name="metamodel.sirius.parte3" value="${metamodel.sirius.parte2}http://www.eclipse.org/sirius/description/contribution/1.0.0,"/>
+	<property name="metamodel.sirius.parte4" value="${metamodel.sirius.parte3}http://www.eclipse.org/sirius/description/style/1.1.0,"/>
+	<property name="metamodel.sirius.parte5" value="${metamodel.sirius.parte4}http://www.eclipse.org/sirius/description/tool/1.1.0,"/>
+	<property name="metamodel.sirius.parte6" value="${metamodel.sirius.parte5}http://www.eclipse.org/sirius/description/validation/1.1.0,"/>
+	<property name="metamodel.sirius.parte7" value="${metamodel.sirius.parte6}http://www.eclipse.org/sirius/diagram/1.1.0,"/>
+	<property name="metamodel.sirius.parte8" value="${metamodel.sirius.parte7}http://www.eclipse.org/sirius/diagram/description/1.1.0,"/>
+	<property name="metamodel.sirius.parte9" value="${metamodel.sirius.parte8}http://www.eclipse.org/sirius/diagram/description/filter/1.1.0,"/>
+	<property name="metamodel.sirius.parte10" value="${metamodel.sirius.parte9}http://www.eclipse.org/sirius/diagram/description/style/1.1.0,"/>
+	<property name="metamodel.sirius.parte11" value="${metamodel.sirius.parte10}http://www.eclipse.org/sirius/diagram/description/tool/1.1.0,"/>
+	<property name="metamodel.sirius.parte12" value="${metamodel.sirius.parte11}http://www.eclipse.org/sirius/diagram/sequence/description/2.0.0,"/>
+	<property name="metamodel.sirius.parte13" value="${metamodel.sirius.parte12}http://www.eclipse.org/sirius/diagram/sequence/2.0.0,"/>
+	<property name="metamodel.sirius.parte14" value="${metamodel.sirius.parte13}http://www.eclipse.org/sirius/diagram/description/concern/1.1.0,"/>
+	<property name="metamodel.sirius.parte15" value="${metamodel.sirius.parte14}http://www.eclipse.org/sirius/diagram/sequence/description/tool/2.0.0,"/>
+	<property name="metamodel.sirius.parte16" value="${metamodel.sirius.parte15}http://www.eclipse.org/sirius/diagram/sequence/ordering/2.0.0,"/>
+	<property name="metamodel.sirius.parte17" value="${metamodel.sirius.parte16}http://www.eclipse.org/sirius/diagram/sequence/template/2.0.0,"/>
+	<property name="metamodel.sirius.parte18" value="${metamodel.sirius.parte17}http://www.eclipse.org/sirius/dsl/layoutdata/1.1.0,"/>
+	<property name="metamodel.sirius.parte19" value="${metamodel.sirius.parte18}http://www.eclipse.org/sirius/table/1.1.0,"/>
+	<property name="metamodel.sirius.parte20" value="${metamodel.sirius.parte19}http://www.eclipse.org/sirius/table/description/1.1.0,"/>
+	<property name="metamodel.sirius.parte21" value="${metamodel.sirius.parte20}http://www.eclipse.org/sirius/tree/1.0.0,"/>
+	<property name="metamodel.sirius.parte22" value="${metamodel.sirius.parte21}http://www.eclipse.org/sirius/tree/description/1.0.0,"/>
+	<property name="metamodel.sirius" value="${metamodel.sirius.parte22}http://www.eclipse.org/sirius/1.1.0"/>
+
+	<target name="Preload">
+		<echo>Preconfigurando datos de archivos</echo>
+		<delete file="${Result}" failonerror="Clean Data Model" />
+		<delete file="${DataModel}" failonerror="Clean Data Model" />
+		<copy file="./Chain/baseModels/inputs/2_visualizationData.xmi" tofile="${DataModel}"/>
+		<delete file="${OutputModel}" failonerror="Clean Data Model" />
+		<copy file="./Chain/baseModels/inputs/3_visualizationSpecification.xmi" tofile="${OutputModel}"/>
+	</target>
+	
+	<target name="Validation">
+		<echo>Validando metamodelo de Entreda</echo>
+		<epsilon.emf.register file="${metamodel.visualization.uri}"/>
+		<epsilon.emf.loadModel name="Input" modelfile="${InputModel}" metamodeluri="${metamodel.ecore}" read="true" store="true" />
+		<epsilon.evl src="${transformacion.Validation}">
+			<model ref="Input" />
+		</epsilon.evl>
+	</target>
+	
+	<target name="Transformacion1">
+		<echo>Corriendo Transformacion 1: De Metamodelo Ecore a Instancia del Metamodelo de Visualization</echo>
+		<epsilon.emf.loadModel name="Input" modelfile="${InputModel}" metamodeluri="${metamodel.ecore}" read="true" store="true" />
+		<epsilon.emf.loadModel name="Data" modelfile="${DataModel}" metamodeluri="${metamodel.visualization.metamodeluri}" read="true" store="true" />
+		<epsilon.etl src="${transformation.InputToData}">
+  			<model ref="Input" />
+			<model ref="Data" />
+  		</epsilon.etl>
+		<epsilon.disposeModel model="Data"></epsilon.disposeModel>
+		
+	</target>
+
+	<target name="Transformacion2">
+		<echo>Corriendo Transformacion 2: De Instancia del Metamodelo de Visualization a Definición de Sirius</echo>
+		<epsilon.emf.loadModel name="Data" modelfile="${DataModel}" metamodeluri="${metamodel.visualization.metamodeluri}" read="true" store="true" />
+		<epsilon.emf.loadModel name="Sirius" modelfile="${OutputModel}" metamodeluri="${metamodel.sirius}" read="true" store="true" />
+		<epsilon.etl src="${transformation.DataToVisualization}">
+  			<model ref="Data" />
+			<model ref="Sirius" />
+  		</epsilon.etl>
+		<epsilon.disposeModel model="Sirius"></epsilon.disposeModel>
+	</target>
+	
+	<target name="Finish">
+		<delete file="${DataModel}" failonerror="Clean Data Model" />
+		<copy file="${OutputModel}" tofile="${Result}"/>
+		<delete file="${OutputModel}" failonerror="Clean Data Model" />
+		<echo>Proceso Terminado</echo>
+	</target>
+
+	<!-- Main -->	
+	<target name="main">
+		<echo>Ha iniciado la cadena de transformacion</echo>
+		<antcall target="Preload"></antcall>
+		<antcall target="Validation"></antcall>
+		<antcall target="Transformacion1"></antcall>
+		<antcall target="Transformacion2"></antcall>
+		<antcall target="Finish"></antcall>
+	</target>
+
+</project>
